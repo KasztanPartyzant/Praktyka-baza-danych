@@ -1,0 +1,401 @@
+<?php
+require_once dirname(__FILE__) . '/libs/functions.php';
+require_once dirname(__FILE__) . '/libs/database.php';
+
+require 'vendor/autoload.php';
+
+use Buki\Router\Router;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+/// https://github.com/izniburak/php-router/wiki
+
+$router = new Router;
+
+$router->get('/', function(Request $request, Response $response) {
+    $response->setContent('Hello World');
+    return $response;
+});
+
+function zabezpiecz($zmienna)
+{
+    $zmienna = trim($zmienna);
+    $zmienna = strip_tags($zmienna);
+
+    return $zmienna;
+}
+
+$router->post('/zapisz-sprzedaz', function() {
+
+  $zabezpieczone = [];
+  $bledy = [];
+
+  if (isset($_POST['produktId']))
+  {
+      $zabezpieczone['produktId'] = zabezpiecz($_POST['produktId']);
+  }
+
+  if (isset($_POST['cena']))
+  {
+      $cena = (int)$_POST['cena'];
+
+      if ($cena <= 0)
+      {
+          $bledy[] = 'Cena jest niepoprawna';
+      }
+      else
+      {
+          $zabezpieczone['cena'] = $_POST['cena'];
+
+          if ((stripos($zabezpieczone['cena'], ',') !== false) || (stripos($zabezpieczone['cena'], '.') !== false))
+          {
+              $zabezpieczone['cena'] = str_replace(['.', ','], '', $zabezpieczone['cena']);
+          }
+          else
+          {
+              $zabezpieczone['cena'] = (int)$zabezpieczone['cena'] * 100;
+          }
+      }
+  }
+
+  $zabezpieczone['data_transakcji'] = date('Y-m-d H:i:s');
+
+  if (isset($_POST['ilosc']))
+  {
+      $zabezpieczone['ilosc_sztuk'] = (int)$_POST['ilosc'];
+  }
+
+
+  $zabezpieczone['suma'] = ($zabezpieczone['ilosc_sztuk']*$zabezpieczone['cena']);
+
+  if (count($bledy) > 0)
+  {
+      dump($bledy);
+      die();
+  }
+
+  $db = new Database();
+  $result = $db->insert($zabezpieczone, 'sprzedaz');
+
+  dump($result);
+
+  return 'Hello World.';
+});
+
+
+
+$router->get('/sprzedaz', function() {
+
+    $db = new Database();
+    $results = $db->query('SELECT * FROM sprzedaz');
+});
+
+$router->post('/zapisz-produkt', function() {
+
+    dump($_POST);
+
+    $zabezpieczone = [];
+    $bledy = [];
+
+    if (isset($_POST['produkt']))
+    {
+        $zabezpieczone['produkt'] = zabezpiecz($_POST['produkt']);
+    }
+
+    if (isset($_POST['cena']))
+    {
+        $cena = (int)$_POST['cena'];
+
+        if ($cena <= 0)
+        {
+            $bledy[] = 'Cena jest niepoprawna';
+        }
+        else
+        {
+            $zabezpieczone['cena'] = $_POST['cena'];
+
+            if ((stripos($zabezpieczone['cena'], ',') !== false) || (stripos($zabezpieczone['cena'], '.') !== false))
+            {
+                $zabezpieczone['cena'] = str_replace(['.', ','], '', $zabezpieczone['cena']);
+            }
+            else
+            {
+                $zabezpieczone['cena'] = (int)$zabezpieczone['cena'] * 100;
+            }
+        }
+    }
+
+    if (isset($_POST['cena_promocyjna']))
+    {
+        $zabezpieczone['cena_promocyjna'] = $_POST['cena_promocyjna'];
+
+        if ((stripos($zabezpieczone['cena_promocyjna'], ',') !== false) || (stripos($zabezpieczone['cena_promocyjna'], '.') !== false))
+        {
+            $zabezpieczone['cena_promocyjna'] = str_replace(['.', ','], '', $zabezpieczone['cena_promocyjna']);
+        }
+        else
+        {
+            $zabezpieczone['cena_promocyjna'] = (int)$zabezpieczone['cena_promocyjna'] * 100;
+        }
+    }
+
+    if (isset($_POST['ilosc']))
+    {
+        $zabezpieczone['ilosc'] = (int)$_POST['ilosc'];
+    }
+
+    if (isset($_POST['opis']))
+    {
+        $zabezpieczone['opis'] = zabezpiecz($_POST['opis']);
+    }
+
+    if (count($bledy) > 0)
+    {
+        dump($bledy);
+        die();
+    }
+
+    $db = new Database();
+    $result = $db->insert($zabezpieczone, 'produkty');
+
+    dump($result);
+
+    return 'Hello World.';
+});
+
+
+$router->any('/formSell', function(Request $request, Response $response) {
+
+    $db = new Database();
+
+    $produkty = $db->query('SELECT id,produkt FROM produkty');
+
+    $select = '';
+
+    foreach ($produkty as $produkt)
+    {
+        $select .= '<option value="'.$produkt['id'].'">' . $produkt['produkt'] . '</option>';
+    }
+
+
+    $html = '
+        <form method="post" action="/zapisz-sprzedaz">
+            <div>
+                <select name="produktId">'.$select.'</select>
+            </div>
+
+            <div>
+                <input type="text" placeholder="Cena" name="cena" />
+            </div>
+
+            <div>
+            <input type="text" placeholder="Cena promocyjna" name="cena_promocyjna" />
+            </div>
+
+            <div>
+            <input type="text" placeholder="Ilość" name="ilosc" />
+            </div>
+
+            <div>
+            <textarea placeholder="Opis" name="opis"></textarea>
+            </div>
+
+            <button type="submit">Wyślij</button>
+        </form>
+    ';
+
+    $response->setContent($html);
+    return $response;
+});
+
+
+
+
+$router->any('/form', function(Request $request, Response $response) {
+
+    $html = '
+        <form method="post" action="/zapisz-produkt">
+            <div>
+            <input type="text" placeholder="Nazwa produktu" name="produkt" />
+            </div>
+
+            <div>
+            <input type="text" placeholder="Cena" name="cena" />
+            </div>
+
+            <div>
+            <input type="text" placeholder="Cena promocyjna" name="cena_promocyjna" />
+            </div>
+
+            <div>
+            <input type="text" placeholder="Ilość" name="ilosc" />
+            </div>
+
+            <div>
+            <textarea placeholder="Opis" name="opis"></textarea>
+            </div>
+
+            <button type="submit">Wyślij</button>
+        </form>
+    ';
+
+    $response->setContent($html);
+    return $response;
+});
+
+
+
+$router->get('/licence', function(Request $request, Response $response) {
+
+    $db = new Database();
+
+    $hash = 'KqV_f:#ry$';
+
+    $code = date('YmdHis') . microtime() . $hash;
+
+    $code = sha1($code);
+
+    $save = [
+        'klucz' => $code,
+        'data_wygenerowania' => date('Y-m-d H:i:s'),
+        'data_wygasniecia' => date('Y-m-d H:i:s', strtotime('+1 year')),
+        'akceptacja' => 0
+    ];
+
+    $result = $db->insert($save, 'licencje');
+
+    var_dump($result);
+
+    return $response;
+});
+
+
+$router->get('/licenceCheck/:string', function($code) {
+
+    $db = new Database();
+
+    $istnieje = $db->query('SELECT id FROM licencje WHERE klucz = "'.$code.'" and data_wygasniecia > "'.date('Y-m-d H:i:s').'"');
+
+    if (isset($istnieje[0]))
+    {
+        echo 'OK';
+        die();
+    }
+
+    echo 'Error';
+    die();
+
+});
+
+$router->get('/json', function(Request $request, Response $response) {
+
+    echo '
+    <script>
+    var myObj = {name: "John", age: 31, city: "New York"};
+
+    console.log(myObj);
+
+    var myJSON = JSON.stringify(myObj);
+
+    console.log(myJSON);
+
+    </script>
+    ';
+
+    die();
+
+});
+
+
+
+
+$router->get('/get', function(Request $request, Response $response) {
+
+    $db = new Database();
+    $results = $db->query('SELECT * FROM produkty');
+
+    $json = json_encode($results);
+    echo $json;
+});
+
+
+$router->get('/get/:id', function($id) {
+
+
+    $db = new Database();
+    $results = $db->query('SELECT * FROM produkty WHERE id ='.$id);
+
+
+
+
+    if (isset($results[0]))
+    {
+      dump($results[0]);
+    }
+    else
+    {
+      echo "error";
+    }
+
+
+});
+
+$router->get('/add', function(Request $request, Response $response) {
+
+    $db = new Database();
+    $results = $db->query('SELECT * FROM produkty');
+
+
+    $response->setContent('ADD');
+    $save = [
+        'produkt' => 'platki',
+        'cena' => 1000,
+        'cena_promocyjna' => 850,
+        'ilosc' => 20,
+        'opis' => 'brak'
+    ];
+
+    $result = $db->insert($save, 'produkty');
+
+    var_dump($result);
+
+
+    return $response;
+
+
+});
+
+
+$router->run();
+
+
+die();
+
+
+$conn = new mysqli($config['hostname'], $config['username'], $config['password'], $config['database']);
+
+
+// Sprawdzenie połączenia
+
+if ($conn->connect_error) {
+  die('Connection failed: '. $conn->connect_error);
+}
+echo 'Connected successfully ';
+
+$sql = "SELECT id, firstname, lastname FROM MyGuests";
+$result = $conn->query($sql);
+
+if ($result->num_rows > 0)
+  {
+// dane wyjściowe każdego wiersza
+    while($row = $result->fetch_assoc())
+    {
+        echo "id: " . $row["id"]. " - Name: " . $row["firstname"]. " " . $row["lastname"]. "<br>";
+    }
+  }
+else
+  {
+    echo "0 results";
+  }
+$conn->close();
+?>
